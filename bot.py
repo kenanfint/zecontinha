@@ -13,6 +13,8 @@ from django.conf import settings
 
 from dashboard.models import PairStats, Quotes
 
+from django.core.exceptions import ObjectDoesNotExist
+
 #chat_id = config('TELEGRAM_CHAT_ID', cast=int)
 telegram_api_key = config('TELEGRAM_API_KEY')
 bot = telegram.Bot(telegram_api_key)
@@ -24,12 +26,33 @@ chat_id_list = [
 ]
 
 def select_pair(n):
-    # TODO: Revisar
+    """
+    Select n random PairStats objects filtered by specific model_params criteria.
+
+    Uses order_by('?') for random sampling in the database.
+
+    Returns a list of PairStats instances or an empty list if none found.
+    """
+
     qs = PairStats.objects.filter(
-      Q(model_params__120__adf_pvalue__lte=0.05) &
-      Q(model_params__120__hurst__lte=0.3) &
-      (Q(model_params__120__zscore__gte=2.0) | Q(model_params__120__zscore__lte=-2.0)))
-    return random.sample(set(qs), n)
+        model_params__120__adf_pvalue__lte=0.05,
+        model_params__120__hurst__lte=0.3
+    ).filter(
+        Q(model_params__120__zscore__gte=2.0) | Q(model_params__120__zscore__lte=-2.0)
+    )
+
+    count = qs.count()
+    if count == 0:
+        return []
+
+    # If n is greater than count, limit to the maximum available
+    n = min(n, count)
+
+    # Random sampling directly in the database
+    random_qs = qs.order_by('?')[:n]
+
+    return list(random_qs)
+
 
 def get_plot(x_ticker, y_ticker):
   from coint.cointegration import fp_savefig, _get_residuals_plot
